@@ -1,0 +1,12 @@
+---
+- name: Ensure output directory for install-config exists
+  file:
+    path: "{{ install_config_output_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Render OpenShift install-config.yaml
+  template:
+    src: install-config.yaml.j2
+    dest: "{{ install_config_output_dir }}/install-config.yaml"
+    mode: '0644'

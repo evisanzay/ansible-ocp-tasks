@@ -1,0 +1,44 @@
+---
+- name: Ensure ISO output directory exists
+  file:
+    path: "{{ iso_output_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Download CoreOS ISO
+  get_url:
+    url: "{{ coreos_iso_url }}"
+    dest: "{{ iso_output_dir }}/rhcos.iso"
+    mode: '0644'
+  when: coreos_iso_url is defined
+
+- name: Generate static network files for nodes
+  template:
+    src: static-network.nmconnection.j2
+    dest: "{{ iso_output_dir }}/{{ item.name }}.nmconnection"
+    mode: '0644'
+  loop: "{{ nodes }}"
+  when: item.network is defined
+
+- name: Embed network configuration into ISO per node
+  command: >
+    coreos-installer iso network
+    -i {{ iso_output_dir }}/rhcos.iso
+    -o {{ iso_output_dir }}/{{ item.name }}-static.iso
+    --network-dir {{ iso_output_dir }}
+  loop: "{{ nodes }}"
+  when: item.network is defined
+  args:
+    creates: "{{ iso_output_dir }}/{{ item.name }}-static.iso"
+
+- name: Mount ISO through iLO
+  community.general.hpilo_boot:
+    host: "{{ item.bmc.address }}"
+    login: "{{ item.bmc.username }}"
+    password: "{{ item.bmc.password }}"
+    media: cdrom
+    image: "{{ iso_output_dir }}/{{ item.name }}-static.iso"
+    state: present
+    validate_certs: false
+  loop: "{{ nodes }}"
+  when: item.bmc is defined
