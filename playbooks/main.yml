@@ -1,0 +1,8 @@
+---
+- hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../vars/cluster.yml
+  roles:
+    - install_config
+    - coreos_iso

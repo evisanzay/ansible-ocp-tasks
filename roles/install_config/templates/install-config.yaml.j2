@@ -1,0 +1,55 @@
+apiVersion: v1
+baseDomain: {{ base_domain }}
+metadata:
+  name: {{ cluster_name }}
+networking:
+  machineNetwork:
+  - cidr: {{ network.machine_cidr }}
+  clusterNetwork:
+  - cidr: {{ network.cluster_network_cidr }}
+    hostPrefix: {{ network.cluster_network_host_prefix }}
+  serviceNetwork:
+  - {{ network.service_network_cidr }}
+compute:
+- name: worker
+  replicas: {{ worker_replicas | default(0) }}
+controlPlane:
+  name: master
+  replicas: {{ master_replicas | default(3) }}
+platform:
+  {{ platform }}:
+    {% if platform == 'baremetal' %}
+    hosts:
+    {% for host in nodes %}
+    - name: {{ host.name }}
+      role: {{ host.role }}
+      bmc:
+        address: {{ host.bmc.address }}
+        username: {{ host.bmc.username }}
+        password: {{ host.bmc.password }}
+        disableCertificateVerification: true
+      bootMACAddress: {{ host.mac }}
+      {% if host.network is defined %}
+      networkConfig:
+        interfaces:
+        - name: {{ host.network.interface }}
+          type: ethernet
+          state: up
+          macAddress: {{ host.mac }}
+          ipv4:
+            address:
+            - ip: {{ host.network.address }}
+              prefix-length: {{ host.network.prefix }}
+            gateway: {{ host.network.gateway }}
+            dhcp: false
+          dns:
+            resolver:
+              nameservers:
+              - {{ host.network.dns }}
+      {% endif %}
+    {% endfor %}
+    {% else %}
+    {}
+    {% endif %}
+pullSecret: '{{ pull_secret }}'
+sshKey: '{{ ssh_key }}'

@@ -1,0 +1,13 @@
+[connection]
+id={{ item.name }}
+type=ethernet
+interface-name={{ item.network.interface }}
+
+[ipv4]
+method=manual
+addresses={{ item.network.address }}/{{ item.network.prefix }}
+gateway={{ item.network.gateway }}
+dns={{ item.network.dns }}
+
+[ipv6]
+method=ignore
