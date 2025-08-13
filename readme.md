@@ -3,7 +3,8 @@
 Este repositorio contiene ejemplos de tareas de Ansible para:
 
 1. Generar un `install-config.yaml` paramétrico para OpenShift 4.
-2. Preparar imágenes ISO de CoreOS con configuración de red estática e inyectarlas en nodos HP a través de iLO.
+2. Crear los manifiestos e ignition configs necesarios para la instalación.
+3. Preparar imágenes ISO de CoreOS con configuración de red estática e ignition embebida e inyectarlas en nodos HP a través de iLO.
 
 ## Variables principales
 
@@ -22,8 +23,8 @@ ansible-playbook playbooks/main.yml
 
 El playbook:
 
-- Crea `install-config.yaml` en `{{ install_config_output_dir }}`.
-- Descarga y personaliza la ISO de CoreOS para cada nodo con red estática.
+- Crea `install-config.yaml` y los manifiestos/ignition correspondientes en `{{ install_config_output_dir }}`.
+- Descarga y personaliza la ISO de CoreOS para cada nodo con red estática e ignition.
 - Monta la ISO personalizada en cada host a través de iLO ignorando certificados autofirmados.
 
 ## Dependencias
