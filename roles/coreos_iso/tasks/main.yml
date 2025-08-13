@@ -20,16 +20,28 @@
   loop: "{{ nodes }}"
   when: item.network is defined
 
-- name: Embed network configuration into ISO per node
+- name: Customize ISO per node with network and ignition
   command: >
-    coreos-installer iso network
+    coreos-installer iso customize
     -i {{ iso_output_dir }}/rhcos.iso
-    -o {{ iso_output_dir }}/{{ item.name }}-static.iso
+    -o {{ iso_output_dir }}/{{ item.name }}-install.iso
     --network-dir {{ iso_output_dir }}
+    --ignition-file {{ install_config_output_dir }}/{{ item.role }}.ign
   loop: "{{ nodes }}"
   when: item.network is defined
   args:
-    creates: "{{ iso_output_dir }}/{{ item.name }}-static.iso"
+    creates: "{{ iso_output_dir }}/{{ item.name }}-install.iso"
+
+- name: Customize ISO per node with ignition
+  command: >
+    coreos-installer iso customize
+    -i {{ iso_output_dir }}/rhcos.iso
+    -o {{ iso_output_dir }}/{{ item.name }}-install.iso
+    --ignition-file {{ install_config_output_dir }}/{{ item.role }}.ign
+  loop: "{{ nodes }}"
+  when: item.network is not defined
+  args:
+    creates: "{{ iso_output_dir }}/{{ item.name }}-install.iso"
 
 - name: Mount ISO through iLO
   community.general.hpilo_boot:
@@ -37,7 +49,7 @@
     login: "{{ item.bmc.username }}"
     password: "{{ item.bmc.password }}"
     media: cdrom
-    image: "{{ iso_output_dir }}/{{ item.name }}-static.iso"
+    image: "{{ iso_output_dir }}/{{ item.name }}-install.iso"
     state: present
     validate_certs: false
   loop: "{{ nodes }}"

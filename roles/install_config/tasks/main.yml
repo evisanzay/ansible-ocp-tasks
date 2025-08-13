@@ -10,3 +10,13 @@
     src: install-config.yaml.j2
     dest: "{{ install_config_output_dir }}/install-config.yaml"
     mode: '0644'
+
+- name: Create OpenShift manifests
+  command: openshift-install create manifests --dir {{ install_config_output_dir }}
+  args:
+    creates: "{{ install_config_output_dir }}/manifests"
+
+- name: Create OpenShift ignition configs
+  command: openshift-install create ignition-configs --dir {{ install_config_output_dir }}
+  args:
+    creates: "{{ install_config_output_dir }}/bootstrap.ign"
