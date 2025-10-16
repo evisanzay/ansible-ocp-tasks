@@ -4,6 +4,8 @@
   vars_files:
     - ../vars/cluster.yml
   roles:
+    - role: qemu_prepare
+      when: platform == 'qemu'
     - role: vmware_prepare
       when: platform == 'vmware'
     - install_config

@@ -17,8 +17,8 @@ controlPlane:
   name: master
   replicas: {{ master_replicas | default(3) }}
 platform:
-  {{ platform }}:
-    {% if platform == 'baremetal' %}
+  {% if platform == 'baremetal' %}
+  baremetal:
     hosts:
     {% for host in nodes %}
     - name: {{ host.name }}
@@ -48,8 +48,10 @@ platform:
               - {{ host.network.dns }}
       {% endif %}
     {% endfor %}
-    {% else %}
-    {}
-    {% endif %}
+  {% elif platform == 'qemu' %}
+  none: {}
+  {% else %}
+  {{ platform }}: {}
+  {% endif %}
 pullSecret: '{{ pull_secret }}'
 sshKey: '{{ ssh_key }}'
