@@ -1,0 +1,54 @@
+---
+- name: Gather virtualization facts to determine QEMU/KVM environment
+  ansible.builtin.setup:
+    gather_subset:
+      - '!all'
+      - '!min'
+      - virtual
+  register: qemu_virtualization_facts
+
+- name: Detect if controller is running on QEMU/KVM
+  ansible.builtin.set_fact:
+    running_on_qemu: "{{ (
+        ('ansible_virtualization_type' in qemu_virtualization_facts.ansible_facts and
+         (qemu_virtualization_facts.ansible_facts.ansible_virtualization_type | default('') | lower) in ['kvm', 'qemu'])
+        or
+        ('ansible_virtualization_vendor' in qemu_virtualization_facts.ansible_facts and
+         (qemu_virtualization_facts.ansible_facts.ansible_virtualization_vendor | default('') | lower) in ['kvm', 'qemu'])
+      ) | bool }}"
+
+- name: Ensure QEMU platform is only used when running on QEMU/KVM
+  ansible.builtin.fail:
+    msg: >-
+      La plataforma qemu está seleccionada pero el host de automatización no parece ser una máquina virtual QEMU/KVM.
+  when: not running_on_qemu
+
+- name: Validate that QEMU node groups are defined
+  ansible.builtin.assert:
+    that:
+      - qemu is defined
+      - qemu.masters is defined
+      - qemu.workers is defined
+    fail_msg: >-
+      La plataforma qemu requiere definir la sección 'qemu' con listas de 'masters' y 'workers'.
+
+- name: Normalize master nodes for QEMU
+  ansible.builtin.set_fact:
+    qemu_master_nodes: "{{ qemu.masters | map('combine', {'role': 'master'}) | list }}"
+
+- name: Normalize worker nodes for QEMU
+  ansible.builtin.set_fact:
+    qemu_worker_nodes: "{{ qemu.workers | map('combine', {'role': 'worker'}) | list }}"
+
+- name: Ensure QEMU node lists are not empty
+  ansible.builtin.assert:
+    that:
+      - qemu_master_nodes | length > 0
+    fail_msg: >-
+      Debes definir al menos un nodo master en la sección qemu.masters.
+
+- name: Set final node list and replica counts for QEMU scenario
+  ansible.builtin.set_fact:
+    nodes: "{{ qemu_master_nodes + qemu_worker_nodes }}"
+    master_replicas: "{{ qemu_master_nodes | length }}"
+    worker_replicas: "{{ qemu_worker_nodes | length }}"
