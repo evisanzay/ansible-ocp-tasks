@@ -1,7 +1,7 @@
 ---
 cluster_name: example
 base_domain: example.com
-platform: baremetal
+platform: baremetal  # Cambia a 'vmware' para entornos virtuales
 
 network:
   machine_cidr: 192.168.111.0/24
@@ -19,10 +19,30 @@ iso_output_dir: ./iso
 coreos_iso_url: https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/latest/latest/rhcos-live.x86_64.iso
 install_config_output_dir: ./install
 
+# Configuración específica para VMware cuando platform == 'vmware'
+vmware:
+  vcenter_hostname: vcenter.example.com
+  username: administrator@vsphere.local
+  password: password
+  datacenter: Datacenter
+  folder: /Datacenter/vm/OCP
+  validate_certs: false
+  disk:
+    label: "Hard disk 2"
+    datastore: datastore1
+    type: thin
+    disk_mode: persistent
+    unit_number: 1
+    scsi_controller: 0
+
 nodes:
   - name: master-0
     role: master
     mac: aa:bb:cc:dd:ee:00
+    vm_name: master-0
+    vmware:
+      disk_label: "Hard disk 2"
+      datastore: datastore1
     bmc:
       address: https://ilo-master-0.example.com
       username: admin
@@ -36,6 +56,10 @@ nodes:
   - name: master-1
     role: master
     mac: aa:bb:cc:dd:ee:01
+    vm_name: master-1
+    vmware:
+      disk_label: "Hard disk 2"
+      datastore: datastore1
     bmc:
       address: https://ilo-master-1.example.com
       username: admin
@@ -49,6 +73,10 @@ nodes:
   - name: master-2
     role: master
     mac: aa:bb:cc:dd:ee:02
+    vm_name: master-2
+    vmware:
+      disk_label: "Hard disk 2"
+      datastore: datastore1
     bmc:
       address: https://ilo-master-2.example.com
       username: admin

@@ -4,5 +4,7 @@
   vars_files:
     - ../vars/cluster.yml
   roles:
+    - role: vmware_prepare
+      when: platform == 'vmware'
     - install_config
     - coreos_iso
