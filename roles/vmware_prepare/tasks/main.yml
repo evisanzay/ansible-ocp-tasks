@@ -1,0 +1,111 @@
+---
+- name: Gather virtualization facts to determine VMware environment
+  ansible.builtin.setup:
+    gather_subset:
+      - '!all'
+      - '!min'
+      - virtual
+  register: vmware_virtualization_facts
+
+- name: Detect if controller is running on VMware
+  ansible.builtin.set_fact:
+    running_on_vmware: "{{ (
+        ('ansible_virtualization_type' in vmware_virtualization_facts.ansible_facts and
+         'vmware' in ((vmware_virtualization_facts.ansible_facts.ansible_virtualization_type | default('')) | lower))
+        or
+        ('ansible_virtualization_vendor' in vmware_virtualization_facts.ansible_facts and
+         'vmware' in ((vmware_virtualization_facts.ansible_facts.ansible_virtualization_vendor | default('')) | lower))
+      ) | bool }}"
+
+- name: Ensure VMware platform is only used when running on VMware
+  ansible.builtin.fail:
+    msg: >-
+      La plataforma vmware está seleccionada pero el host de automatización no parece ser una máquina virtual de VMware.
+  when: not running_on_vmware
+
+- name: Verificar que existe configuración vmware en variables
+  ansible.builtin.assert:
+    that:
+      - vmware is defined
+    fail_msg: >-
+      La plataforma vmware requiere definir la sección 'vmware' en las variables del clúster.
+
+- name: Validar parámetros mínimos de VMware
+  ansible.builtin.assert:
+    that:
+      - vmware.vcenter_hostname is defined
+      - vmware.username is defined
+      - vmware.password is defined
+      - vmware.datacenter is defined
+      - vmware.disk is defined
+      - vmware.disk.label is defined
+      - vmware.disk.datastore is defined
+    fail_msg: >-
+      Faltan parámetros necesarios en la sección vmware del inventario.
+
+- name: Recrear disco de datos de 125GB para cada VM
+  community.vmware.vmware_guest_disk:
+    hostname: "{{ vmware.vcenter_hostname }}"
+    username: "{{ vmware.username }}"
+    password: "{{ vmware.password }}"
+    validate_certs: "{{ vmware.validate_certs | default(false) }}"
+    datacenter: "{{ vmware.datacenter }}"
+    folder: "{{ vmware.folder | default(omit) }}"
+    name: "{{ item.vm_name | default(item.name) }}"
+    state: absent
+    disk:
+      - label: "{{ item.vmware.disk_label | default(vmware.disk.label) }}"
+  loop: "{{ nodes }}"
+
+- name: Crear nuevo disco de 125GB
+  community.vmware.vmware_guest_disk:
+    hostname: "{{ vmware.vcenter_hostname }}"
+    username: "{{ vmware.username }}"
+    password: "{{ vmware.password }}"
+    validate_certs: "{{ vmware.validate_certs | default(false) }}"
+    datacenter: "{{ vmware.datacenter }}"
+    folder: "{{ vmware.folder | default(omit) }}"
+    name: "{{ item.vm_name | default(item.name) }}"
+    state: present
+    disk:
+      - size_gb: 125
+        type: "{{ item.vmware.disk_type | default(vmware.disk.type | default('thin')) }}"
+        datastore: "{{ item.vmware.datastore | default(vmware.disk.datastore) }}"
+        disk_mode: "{{ item.vmware.disk_mode | default(vmware.disk.disk_mode | default('persistent')) }}"
+        unit_number: "{{ item.vmware.unit_number | default(vmware.disk.unit_number | default(1)) }}"
+        scsi_controller: "{{ item.vmware.scsi_controller | default(vmware.disk.scsi_controller | default(0)) }}"
+        label: "{{ item.vmware.disk_label | default(vmware.disk.label) }}"
+  loop: "{{ nodes }}"
+
+- name: Obtener información de red de las máquinas virtuales
+  community.vmware.vmware_guest_info:
+    hostname: "{{ vmware.vcenter_hostname }}"
+    username: "{{ vmware.username }}"
+    password: "{{ vmware.password }}"
+    validate_certs: "{{ vmware.validate_certs | default(false) }}"
+    datacenter: "{{ vmware.datacenter }}"
+    folder: "{{ vmware.folder | default(omit) }}"
+    name: "{{ item.vm_name | default(item.name) }}"
+  register: vmware_guest_info
+  loop: "{{ nodes }}"
+
+- name: Construir mapa de MACs por nodo
+  ansible.builtin.set_fact:
+    vmware_mac_map: "{{ vmware_mac_map | default({}) | combine({ item.item.name: (mac_candidates | first) }) }}"
+  loop: "{{ vmware_guest_info.results }}"
+  vars:
+    mac_candidates: "{{ item.instance.guest.net | default([]) | selectattr('macAddress', 'defined') | map(attribute='macAddress') | list }}"
+  when: item.instance is defined and mac_candidates | length > 0
+
+- name: Inicializar lista actualizada de nodos
+  ansible.builtin.set_fact:
+    updated_nodes: []
+
+- name: Mezclar MAC detectada en definición de nodos
+  ansible.builtin.set_fact:
+    updated_nodes: "{{ updated_nodes + [ item | combine({'mac': (vmware_mac_map[item.name] | default(item.mac))}) ] }}"
+  loop: "{{ nodes }}"
+
+- name: Sustituir lista original de nodos por la actualizada
+  ansible.builtin.set_fact:
+    nodes: "{{ updated_nodes }}"
