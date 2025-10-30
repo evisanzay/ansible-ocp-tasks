@@ -32,8 +32,8 @@ No requiere pasos adicionales: establece `platform: baremetal` y define los nodo
 
 ### QEMU/KVM
 
-1. Establece `platform: qemu` y define las listas `qemu.masters` y `qemu.workers` con los nodos que formarán el clúster.
-2. El rol `qemu_prepare` valida que el host de automatización se esté ejecutando sobre QEMU/KVM, genera la lista completa de nodos a partir de dichas listas y actualiza los contadores de réplicas.
+1. Establece `platform: qemu` y define las listas `qemu.masters` y `qemu.workers` con los nodos que formarán el clúster, además de la entrada `qemu.dns` con los datos de la nueva VM de DNS.
+2. El rol `qemu_prepare` valida que el host de automatización se esté ejecutando sobre QEMU/KVM, genera la lista completa de nodos a partir de dichas listas, normaliza el nodo de DNS y actualiza los contadores de réplicas.
 3. Con la lista resultante se vuelven a ejecutar las tareas comunes para generar `install-config`, manifiestos e ISOs personalizadas.
 
 ## Uso
