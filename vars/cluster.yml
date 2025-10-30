@@ -124,3 +124,12 @@ qemu:
         prefix: 24
         gateway: 192.168.111.1
         dns: 192.168.111.1
+  dns:
+    name: dns-0
+    mac: 52:54:00:dd:ee:ff
+    network:
+      interface: enp1s0
+      address: 192.168.111.40
+      prefix: 24
+      gateway: 192.168.111.1
+      dns: 192.168.111.1

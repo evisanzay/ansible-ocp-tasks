@@ -32,6 +32,16 @@
     fail_msg: >-
       La plataforma qemu requiere definir la sección 'qemu' con listas de 'masters' y 'workers'.
 
+- name: Validate that QEMU DNS node is defined
+  ansible.builtin.assert:
+    that:
+      - qemu.dns is defined
+      - qemu.dns.name is defined
+      - qemu.dns.mac is defined
+      - qemu.dns.network is defined
+    fail_msg: >-
+      La plataforma qemu ahora requiere definir un nodo adicional 'qemu.dns' con nombre, MAC y configuración de red.
+
 - name: Normalize master nodes for QEMU
   ansible.builtin.set_fact:
     qemu_master_nodes: "{{ qemu.masters | map('combine', {'role': 'master'}) | list }}"
@@ -39,6 +49,10 @@
 - name: Normalize worker nodes for QEMU
   ansible.builtin.set_fact:
     qemu_worker_nodes: "{{ qemu.workers | map('combine', {'role': 'worker'}) | list }}"
+
+- name: Normalize DNS node for QEMU
+  ansible.builtin.set_fact:
+    qemu_dns_node: "{{ qemu.dns | combine({'role': 'dns'}) }}"
 
 - name: Ensure QEMU node lists are not empty
   ansible.builtin.assert:
@@ -52,3 +66,4 @@
     nodes: "{{ qemu_master_nodes + qemu_worker_nodes }}"
     master_replicas: "{{ qemu_master_nodes | length }}"
     worker_replicas: "{{ qemu_worker_nodes | length }}"
+    dns_node: "{{ qemu_dns_node }}"
