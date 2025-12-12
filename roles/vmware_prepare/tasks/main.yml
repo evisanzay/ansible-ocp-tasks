@@ -43,6 +43,10 @@
     fail_msg: >-
       Faltan parámetros necesarios en la sección vmware del inventario.
 
+- name: Seleccionar solo nodos gestionados por VMware
+  ansible.builtin.set_fact:
+    vmware_nodes: "{{ nodes | default([]) | selectattr('vmware', 'defined') | list }}"
+
 - name: Recrear disco de datos de 125GB para cada VM
   community.vmware.vmware_guest_disk:
     hostname: "{{ vmware.vcenter_hostname }}"
@@ -55,7 +59,7 @@
     state: absent
     disk:
       - label: "{{ item.vmware.disk_label | default(vmware.disk.label) }}"
-  loop: "{{ nodes }}"
+  loop: "{{ vmware_nodes }}"
 
 - name: Crear nuevo disco de 125GB
   community.vmware.vmware_guest_disk:
@@ -75,7 +79,7 @@
         unit_number: "{{ item.vmware.unit_number | default(vmware.disk.unit_number | default(1)) }}"
         scsi_controller: "{{ item.vmware.scsi_controller | default(vmware.disk.scsi_controller | default(0)) }}"
         label: "{{ item.vmware.disk_label | default(vmware.disk.label) }}"
-  loop: "{{ nodes }}"
+  loop: "{{ vmware_nodes }}"
 
 - name: Obtener información de red de las máquinas virtuales
   community.vmware.vmware_guest_info:
@@ -87,7 +91,7 @@
     folder: "{{ vmware.folder | default(omit) }}"
     name: "{{ item.vm_name | default(item.name) }}"
   register: vmware_guest_info
-  loop: "{{ nodes }}"
+  loop: "{{ vmware_nodes }}"
 
 - name: Construir mapa de MACs por nodo
   ansible.builtin.set_fact:

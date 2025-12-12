@@ -1,0 +1,39 @@
+---
+- name: Validar que el entorno solicitado existe
+  ansible.builtin.assert:
+    that:
+      - environment_type is defined
+      - environments is defined
+      - environment_type in environments
+    fail_msg: >-
+      El entorno seleccionado no está definido en la variable 'environments'.
+
+- name: Seleccionar configuración del entorno
+  ansible.builtin.set_fact:
+    environment_config: "{{ environments[environment_type] }}"
+
+- name: Propagar plataforma y parámetros comunes del entorno
+  ansible.builtin.set_fact:
+    platform: "{{ environment_config.platform | default(platform) }}"
+    load_balancers: "{{ environment_config.load_balancers | default(load_balancers | default([])) }}"
+
+- name: Propagar configuración de VMware cuando aplique
+  ansible.builtin.set_fact:
+    vmware: "{{ environment_config.vmware }}"
+  when: environment_config.vmware is defined
+
+- name: Propagar nodos definidos en el entorno
+  ansible.builtin.set_fact:
+    nodes: "{{ environment_config.nodes }}"
+  when: environment_config.nodes is defined
+
+- name: Calcular replicas de masters y workers
+  ansible.builtin.set_fact:
+    master_replicas: "{{ (nodes | selectattr('role', 'equalto', 'master') | list | length) | default(master_replicas) }}"
+    worker_replicas: "{{ (nodes | selectattr('role', 'equalto', 'worker') | list | length) | default(worker_replicas) }}"
+  when: nodes is defined
+
+- name: Propagar definición qemu cuando aplique
+  ansible.builtin.set_fact:
+    qemu: "{{ environment_config.qemu }}"
+  when: environment_config.qemu is defined

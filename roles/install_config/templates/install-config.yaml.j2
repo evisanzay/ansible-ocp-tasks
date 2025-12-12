@@ -32,6 +32,35 @@ platform:
       {% if host.network is defined %}
       networkConfig:
         interfaces:
+        {% if host.network.bond is defined %}
+        - name: {{ host.network.bond.name }}
+          type: bond
+          state: up
+          macAddress: {{ host.mac }}
+          ipv4:
+            address:
+            - ip: {{ host.network.address }}
+              prefix-length: {{ host.network.prefix }}
+            gateway: {{ host.network.gateway }}
+            dhcp: false
+          dns:
+            resolver:
+              nameservers:
+              - {{ host.network.dns }}
+          link-aggregation:
+            mode: {{ host.network.bond.mode | default('active-backup') }}
+            port:
+            {% for iface in host.network.bond.interfaces %}
+            - {{ iface }}
+            {% endfor %}
+        {% for iface in host.network.bond.interfaces %}
+        - name: {{ iface }}
+          type: ethernet
+          state: up
+          ipv4:
+            enabled: false
+        {% endfor %}
+        {% else %}
         - name: {{ host.network.interface }}
           type: ethernet
           state: up
@@ -46,6 +75,7 @@ platform:
             resolver:
               nameservers:
               - {{ host.network.dns }}
+        {% endif %}
       {% endif %}
     {% endfor %}
   {% elif platform == 'qemu' %}

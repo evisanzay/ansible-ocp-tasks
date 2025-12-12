@@ -1,7 +1,13 @@
 [connection]
 id={{ item.name }}
-type=ethernet
-interface-name={{ item.network.interface }}
+type={{ 'bond' if item.network.bond is defined else 'ethernet' }}
+interface-name={{ item.network.bond.name if item.network.bond is defined else item.network.interface }}
+
+{% if item.network.bond is defined %}
+[bond]
+slaves={{ item.network.bond.interfaces | join(';') }}
+options=mode={{ item.network.bond.mode | default('active-backup') }},miimon={{ item.network.bond.miimon | default(100) }}
+{% endif %}
 
 [ipv4]
 method=manual

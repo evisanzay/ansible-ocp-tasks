@@ -1,7 +1,176 @@
 ---
+# Entorno seleccionado: "lab" (QEMU para laboratorio) o "nopro" (VMware con workers físicos HP con iLO)
+environment_type: lab
+
+# Definición completa por entorno
+environments:
+  lab:
+    description: Laboratorio con QEMU/KVM y más nodos de prueba
+    platform: qemu
+    load_balancers:
+      - name: api-lab
+        address: 192.168.111.250
+        ports: [6443, 22623]
+      - name: apps-lab
+        address: 192.168.111.251
+        ports: [80, 443]
+    qemu:
+      masters:
+        - name: master-0
+          mac: 52:54:00:aa:bb:00
+          network:
+            interface: enp1s0
+            address: 192.168.111.20
+            prefix: 24
+            gateway: 192.168.111.1
+            dns: 192.168.111.1
+        - name: master-1
+          mac: 52:54:00:aa:bb:01
+          network:
+            interface: enp1s0
+            address: 192.168.111.21
+            prefix: 24
+            gateway: 192.168.111.1
+            dns: 192.168.111.1
+        - name: master-2
+          mac: 52:54:00:aa:bb:02
+          network:
+            interface: enp1s0
+            address: 192.168.111.22
+            prefix: 24
+            gateway: 192.168.111.1
+            dns: 192.168.111.1
+      workers:
+        - name: worker-0
+          mac: 52:54:00:aa:cc:00
+          network:
+            interface: enp1s0
+            address: 192.168.111.30
+            prefix: 24
+            gateway: 192.168.111.1
+            dns: 192.168.111.1
+      dns:
+        name: dns-0
+        mac: 52:54:00:dd:ee:ff
+        network:
+          interface: enp1s0
+          address: 192.168.111.40
+          prefix: 24
+          gateway: 192.168.111.1
+          dns: 192.168.111.1
+
+  nopro:
+    description: Entorno de desarrollo/preproducción con masters en VMware y workers físicos HP con bonding
+    platform: vmware
+    load_balancers:
+      - name: api-nopro
+        address: 10.10.0.50
+        ports: [6443, 22623]
+      - name: apps-nopro
+        address: 10.10.0.51
+        ports: [80, 443]
+    vmware:
+      vcenter_hostname: vcenter.example.com
+      username: administrator@vsphere.local
+      password: password
+      datacenter: Datacenter
+      folder: /Datacenter/vm/OCP
+      validate_certs: false
+      disk:
+        label: "Hard disk 2"
+        datastore: datastore1
+        type: thin
+        disk_mode: persistent
+        unit_number: 1
+        scsi_controller: 0
+    nodes:
+      - name: master-0
+        role: master
+        vm_name: master-0
+        vmware:
+          disk_label: "Hard disk 2"
+          datastore: datastore1
+        network:
+          bond:
+            name: bond0
+            interfaces: [ens1f0, ens1f1]
+            mode: active-backup
+            miimon: 100
+          address: 10.10.0.10
+          prefix: 24
+          gateway: 10.10.0.1
+          dns: 10.10.0.1
+      - name: master-1
+        role: master
+        vm_name: master-1
+        vmware:
+          disk_label: "Hard disk 2"
+          datastore: datastore1
+        network:
+          bond:
+            name: bond0
+            interfaces: [ens1f0, ens1f1]
+            mode: active-backup
+            miimon: 100
+          address: 10.10.0.11
+          prefix: 24
+          gateway: 10.10.0.1
+          dns: 10.10.0.1
+      - name: master-2
+        role: master
+        vm_name: master-2
+        vmware:
+          disk_label: "Hard disk 2"
+          datastore: datastore1
+        network:
+          bond:
+            name: bond0
+            interfaces: [ens1f0, ens1f1]
+            mode: active-backup
+            miimon: 100
+          address: 10.10.0.12
+          prefix: 24
+          gateway: 10.10.0.1
+          dns: 10.10.0.1
+      - name: worker-0
+        role: worker
+        mac: aa:bb:cc:dd:ee:10
+        bmc:
+          address: https://ilo-worker-0.example.com
+          username: admin
+          password: password
+        network:
+          bond:
+            name: bond0
+            interfaces: [eno1, eno2]
+            mode: active-backup
+            miimon: 100
+          address: 10.10.0.20
+          prefix: 24
+          gateway: 10.10.0.1
+          dns: 10.10.0.1
+      - name: worker-1
+        role: worker
+        mac: aa:bb:cc:dd:ee:11
+        bmc:
+          address: https://ilo-worker-1.example.com
+          username: admin
+          password: password
+        network:
+          bond:
+            name: bond0
+            interfaces: [eno1, eno2]
+            mode: active-backup
+            miimon: 100
+          address: 10.10.0.21
+          prefix: 24
+          gateway: 10.10.0.1
+          dns: 10.10.0.1
+
+# Variables comunes a todos los entornos
 cluster_name: example
 base_domain: example.com
-platform: baremetal  # Cambia a 'vmware' o 'qemu' según el entorno
+platform: baremetal  # Se sobreescribe automáticamente por environment_prepare
 
 network:
   machine_cidr: 192.168.111.0/24
@@ -18,118 +187,3 @@ ssh_key: '{{ lookup("file", "~/.ssh/id_rsa.pub") }}'
 iso_output_dir: ./iso
 coreos_iso_url: https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/latest/latest/rhcos-live.x86_64.iso
 install_config_output_dir: ./install
-
-# Configuración específica para VMware cuando platform == 'vmware'
-vmware:
-  vcenter_hostname: vcenter.example.com
-  username: administrator@vsphere.local
-  password: password
-  datacenter: Datacenter
-  folder: /Datacenter/vm/OCP
-  validate_certs: false
-  disk:
-    label: "Hard disk 2"
-    datastore: datastore1
-    type: thin
-    disk_mode: persistent
-    unit_number: 1
-    scsi_controller: 0
-
-nodes:
-  - name: master-0
-    role: master
-    mac: aa:bb:cc:dd:ee:00
-    vm_name: master-0
-    vmware:
-      disk_label: "Hard disk 2"
-      datastore: datastore1
-    bmc:
-      address: https://ilo-master-0.example.com
-      username: admin
-      password: password
-    network:
-      interface: eno1
-      address: 192.168.111.10
-      prefix: 24
-      gateway: 192.168.111.1
-      dns: 192.168.111.1
-  - name: master-1
-    role: master
-    mac: aa:bb:cc:dd:ee:01
-    vm_name: master-1
-    vmware:
-      disk_label: "Hard disk 2"
-      datastore: datastore1
-    bmc:
-      address: https://ilo-master-1.example.com
-      username: admin
-      password: password
-    network:
-      interface: eno1
-      address: 192.168.111.11
-      prefix: 24
-      gateway: 192.168.111.1
-      dns: 192.168.111.1
-  - name: master-2
-    role: master
-    mac: aa:bb:cc:dd:ee:02
-    vm_name: master-2
-    vmware:
-      disk_label: "Hard disk 2"
-      datastore: datastore1
-    bmc:
-      address: https://ilo-master-2.example.com
-      username: admin
-      password: password
-    network:
-      interface: eno1
-      address: 192.168.111.12
-      prefix: 24
-      gateway: 192.168.111.1
-      dns: 192.168.111.1
-
-# Configuración específica para QEMU/KVM cuando platform == 'qemu'
-qemu:
-  masters:
-    - name: master-0
-      mac: 52:54:00:aa:bb:00
-      network:
-        interface: enp1s0
-        address: 192.168.111.20
-        prefix: 24
-        gateway: 192.168.111.1
-        dns: 192.168.111.1
-    - name: master-1
-      mac: 52:54:00:aa:bb:01
-      network:
-        interface: enp1s0
-        address: 192.168.111.21
-        prefix: 24
-        gateway: 192.168.111.1
-        dns: 192.168.111.1
-    - name: master-2
-      mac: 52:54:00:aa:bb:02
-      network:
-        interface: enp1s0
-        address: 192.168.111.22
-        prefix: 24
-        gateway: 192.168.111.1
-        dns: 192.168.111.1
-  workers:
-    - name: worker-0
-      mac: 52:54:00:aa:cc:00
-      network:
-        interface: enp1s0
-        address: 192.168.111.30
-        prefix: 24
-        gateway: 192.168.111.1
-        dns: 192.168.111.1
-  dns:
-    name: dns-0
-    mac: 52:54:00:dd:ee:ff
-    network:
-      interface: enp1s0
-      address: 192.168.111.40
-      prefix: 24
-      gateway: 192.168.111.1
-      dns: 192.168.111.1
