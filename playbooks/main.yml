@@ -4,9 +4,11 @@
   vars_files:
     - ../vars/cluster.yml
   roles:
+    - environment_prepare
     - role: qemu_prepare
       when: platform == 'qemu'
     - role: vmware_prepare
       when: platform == 'vmware'
+    - load_balancer_check
     - install_config
     - coreos_iso

@@ -1,0 +1,19 @@
+---
+- name: Validar definición de balanceadores externos
+  ansible.builtin.assert:
+    that:
+      - load_balancers is defined
+      - load_balancers | length > 0
+    fail_msg: >-
+      Debes definir la lista 'load_balancers' con al menos un balanceador externo para validar su conectividad.
+
+- name: Comprobar conectividad a los balanceadores
+  ansible.builtin.wait_for:
+    host: "{{ item.0.address }}"
+    port: "{{ item.1 }}"
+    timeout: 5
+    state: started
+  loop: "{{ load_balancers | subelements('ports') }}"
+  loop_control:
+    label: "{{ item.0.name }}:{{ item.1 }}"
+  when: item.0.address is defined and item.1 is defined
