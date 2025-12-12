@@ -1,62 +1,69 @@
 # Ansible OpenShift Bare Metal Tasks
 
-Este repositorio contiene ejemplos de tareas de Ansible para:
+Este repositorio contiene un ejemplo completo para generar la configuración necesaria para instalar OpenShift 4 sobre bare metal, laboratorio con QEMU/KVM o masters en VMware + workers físicos. Incluye las tareas para construir el `install-config.yaml`, crear los manifiestos/ignitions, personalizar ISOs de CoreOS y validar conectividad con balanceadores.
 
-1. Generar un `install-config.yaml` paramétrico para OpenShift 4.
-2. Crear los manifiestos e ignition configs necesarios para la instalación.
-3. Preparar imágenes ISO de CoreOS con configuración de red estática e ignition embebida e inyectarlas en nodos HP a través de iLO.
-4. Gestionar máquinas virtuales en VMware recreando un disco de 125 GB, recogiendo la MAC real y reutilizando las tareas anteriores para generar manifiestos e ISOs.
-5. Verificar la salud de los balanceadores externos antes de continuar con la instalación.
+## Contenido del repo
+- `playbooks/main.yml`: playbook de entrada que orquesta todos los roles.
+- `vars/cluster.yml`: única fuente de variables de ejemplo; aquí se selecciona el entorno, nodos, red, credenciales y rutas de salida.
+- `roles/`:
+  - `environment_prepare`: valida el entorno elegido, propaga plataforma, nodos y balanceadores.
+  - `qemu_prepare`: normaliza nodos de laboratorio, asegura que el controlador corre en QEMU/KVM y calcula réplicas.
+  - `vmware_prepare`: valida que se ejecute sobre VMware, recrea el disco de 125 GB en cada VM, lee la MAC real y la inyecta en la definición de nodos.
+  - `load_balancer_check`: comprueba conectividad a los balanceadores definidos.
+  - `install_config`: genera `install-config.yaml` y ejecuta `openshift-install create manifests/ignition`.
+  - `coreos_iso`: descarga la ISO base, genera configuración de red estática, personaliza una ISO por nodo e intenta montarla por iLO cuando hay BMC.
+- Plantillas:
+  - `roles/install_config/templates/install-config.yaml.j2`: plantilla del `install-config.yaml` con soporte para bare metal, VMware/QEMU (modo none) y redes estáticas/bonding.
+  - `roles/coreos_iso/templates/static-network.nmconnection.j2`: conexión de NetworkManager usada al personalizar la ISO.
 
-## Variables principales
+## Flujo de ejecución
+1. `environment_prepare` carga la sección del entorno seleccionado en `vars/cluster.yml` (`environment_type`) y fija variables comunes (`platform`, `load_balancers`, `nodes`, `vmware`, `qemu`).
+2. Según la plataforma:
+   - `qemu_prepare` valida que el controlador esté en QEMU/KVM, genera la lista de masters/workers y calcula réplicas.
+   - `vmware_prepare` comprueba que se ejecuta sobre VMware, recrea el disco adicional y sustituye la MAC detectada en cada VM.
+3. `load_balancer_check` confirma conectividad a los puertos definidos.
+4. `install_config` crea el `install-config.yaml`, manifiestos e ignitions en `install_config_output_dir`.
+5. `coreos_iso` descarga la ISO de RHCOS (una vez), genera archivos `*.nmconnection` por nodo y produce ISOs personalizadas en `iso_output_dir`. Si el nodo tiene `bmc`, monta la ISO vía iLO.
 
-Las variables se definen en `vars/cluster.yml` y cubren:
+## Variables y configuración
+Todo se controla desde `vars/cluster.yml`:
+- `environment_type`: `lab` (QEMU/KVM) o `nopro` (VMware + físicos).
+- `environments.*`: define nodos, red, balanceadores y configuración específica de la plataforma elegida.
+- `cluster_name`, `base_domain`, `network`, `master_replicas`, `worker_replicas`: parámetros globales usados por la plantilla del install-config.
+- `pull_secret`, `ssh_key`: se leen por defecto del home del usuario; ajusta las rutas si usas ubicaciones distintas.
+- `coreos_iso_url`, `iso_output_dir`, `install_config_output_dir`: rutas de entrada/salida para ISOs y manifiestos.
 
-- Datos básicos del clúster (`cluster_name`, `base_domain`, `pull_secret`, `ssh_key`).
-- Parámetros de red estática y número de réplicas.
-- Definición de nodos incluyendo interfaz, IP, gateway, DNS, bonding y credenciales de iLO.
-- Tipo de plataforma (`platform`) calculado automáticamente a partir del entorno elegido (`environment_type`).
-- Conexión a vCenter, datastore y parámetros del disco adicional cuando se ejecuta sobre VMware.
-- Lista de balanceadores a validar (dirección y puertos).
+### Dónde tocar según la necesidad
+- **Cambiar nodos o red**: editar `vars/cluster.yml` en la sección del entorno y ajustar `network`/`nodes` (interfaces, bonding, gateway, DNS, BMC, etc.).
+- **Plantilla del install-config**: modificar `roles/install_config/templates/install-config.yaml.j2` si necesitas nuevas opciones de plataforma o tweaks en `networkConfig`.
+- **Plantilla de red estática para la ISO**: editar `roles/coreos_iso/templates/static-network.nmconnection.j2` para cambiar parámetros de NetworkManager.
+- **Comandos o validaciones de cada rol**: actualizar los `tasks/main.yml` dentro de cada rol según corresponda (por ejemplo, cambiar el tamaño del disco en `roles/vmware_prepare/tasks/main.yml`).
 
-## Escenarios soportados
+## Requisitos previos
+- Python 3 y Ansible.
+- Binarios de `openshift-install` y `coreos-installer` disponibles en `PATH` en el host de automatización.
+- Colecciones Ansible necesarias:
+  ```bash
+  pip install ansible
+  ansible-galaxy collection install community.general community.vmware
+  ```
+- Acceso de red a vCenter (para el escenario VMware) y a los balanceadores declarados.
 
-### Laboratorio (QEMU/KVM)
+## Cómo ejecutar
+1. Ajusta `vars/cluster.yml` al entorno deseado (al menos `environment_type`, nodos, red y credenciales).
+2. Ejecuta el playbook principal desde la raíz del repo:
+   ```bash
+   ansible-playbook playbooks/main.yml
+   ```
+3. Resultados esperados:
+   - Manifiestos e ignitions en `install_config_output_dir` (por defecto `./install`).
+   - ISOs personalizadas por nodo en `iso_output_dir` (por defecto `./iso`).
+   - Montaje remoto de las ISOs en nodos con BMC/iLO definido.
 
-- Selecciona `environment_type: lab`.
-- Usa `platform: qemu` y las listas `qemu.masters`, `qemu.workers` y `qemu.dns` para poblar los nodos.
-- El rol `qemu_prepare` valida que el host de automatización se esté ejecutando sobre QEMU/KVM, genera la lista completa de nodos y actualiza los contadores de réplicas.
-- Se validan los balanceadores definidos en `load_balancers` para confirmar conectividad (puertos 6443/22623 para API y 80/443 para apps en el ejemplo).
-
-### Desarrollo/Preproducción (nopro)
-
-- Selecciona `environment_type: nopro`.
-- Define los masters en VMware y los workers físicos HP con iLO.
-- El rol `environment_prepare` propaga la configuración de VMware, la lista completa de nodos (incluyendo los físicos) y los balanceadores externos.
-- El rol `vmware_prepare` solo aplica las operaciones de disco y descubrimiento de MAC sobre los nodos que tienen sección `vmware`, permitiendo mezclar masters virtuales y workers baremetal.
-- El archivo `static-network.nmconnection.j2` y el `install-config` soportan bonding activo/pasivo sobre dos interfaces.
-
-## Uso
-
-```bash
-ansible-playbook playbooks/main.yml
-```
-
-El playbook:
-
-- Selecciona el entorno (`lab` o `nopro`) y ajusta plataforma, nodos, balanceadores y configuración de VMware.
-- (VMware) Valida la ejecución sobre VMware, recrea el disco adicional de 125 GB solo en los nodos virtuales, obtiene la MAC real y la integra en la definición de nodos.
-- (QEMU/KVM) Verifica que el controlador se ejecuta sobre QEMU/KVM, divide los nodos entre masters y workers y recompone la lista general antes de continuar.
-- Comprueba conectividad hacia los balanceadores externos declarados.
-- Crea `install-config.yaml` y los manifiestos/ignition correspondientes en `{{ install_config_output_dir }}` con soporte de bonding.
-- Descarga y personaliza la ISO de CoreOS para cada nodo con red estática e ignition.
-- Monta la ISO personalizada en cada host a través de iLO ignorando certificados autofirmados.
-
-## Dependencias
-
-Se requiere tener instalado Ansible y las colecciones necesarias:
-
-```bash
-pip install ansible
-ansible-galaxy collection install community.general community.vmware
-```
+## Notas para troubleshooting rápido
+- Si falta alguna variable requerida, los roles lanzan `assert` con mensajes en castellano.
+- Para verificar conectividad a balanceadores antes de ejecutar todo, puedes lanzar solo ese rol:
+  ```bash
+  ansible-playbook playbooks/main.yml --tags load_balancer_check
+  ```
+- Los comandos `openshift-install` y `coreos-installer` deben estar instalados en el equipo que corre Ansible; de lo contrario las tareas fallarán.
